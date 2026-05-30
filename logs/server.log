@@ -1,0 +1,123 @@
+[2026-05-30 15:52:29] Server starting up
+[2026-05-30 15:52:29] Server listening for connections
+[2026-05-30 15:52:35] Client starting up
+[2026-05-30 15:52:35] [Thread 0] Checking for update...
+[2026-05-30 15:52:35] [Thread 0] Connected to server
+[2026-05-30 15:52:35] [Thread 1] Incoming connection accepted
+[2026-05-30 15:52:35] [Thread 0] Sending current version: 1
+[2026-05-30 15:52:35] [Thread 1] Client connected
+[2026-05-30 15:52:35] [Thread 1] Client version received: 1
+[2026-05-30 15:52:35] [Thread 1] Update required — sending file
+[2026-05-30 15:52:35] [Thread 0] Update available — downloading...
+[2026-05-30 15:52:35] [Thread 1] Update file sent successfully
+[2026-05-30 15:52:35] [Thread 1] Client disconnected
+[2026-05-30 15:52:35] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 15:52:35] [Thread 0] Simulating update installation...
+[2026-05-30 15:52:36] [Thread 0] Update installed successfully
+[2026-05-30 15:52:36] [Thread 0] Local version updated
+[2026-05-30 15:52:36] [Thread 0] Closing connection
+[2026-05-30 15:53:17] Client starting up
+[2026-05-30 15:53:17] [Thread 0] Checking for update...
+[2026-05-30 15:53:17] [Thread 0] Connected to server
+[2026-05-30 15:53:17] [Thread 2] Incoming connection accepted
+[2026-05-30 15:53:17] [Thread 0] Sending current version: 1
+[2026-05-30 15:53:17] [Thread 2] Client connected
+[2026-05-30 15:53:17] [Thread 2] Client version received: 1
+[2026-05-30 15:53:17] [Thread 0] Update available — downloading...
+[2026-05-30 15:53:17] [Thread 2] Update required — sending file
+[2026-05-30 15:53:17] [Thread 2] Update file sent successfully
+[2026-05-30 15:53:17] [Thread 2] Client disconnected
+[2026-05-30 15:53:17] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 15:53:17] [Thread 0] Simulating update installation...
+[2026-05-30 15:53:18] [Thread 0] Update installed successfully
+[2026-05-30 15:53:18] [Thread 0] Local version updated
+[2026-05-30 15:53:18] [Thread 0] Closing connection
+[2026-05-30 15:57:23] Client starting up
+[2026-05-30 15:57:23] [Thread 0] Checking for update...
+[2026-05-30 15:57:23] [Thread 0] Connected to server
+[2026-05-30 15:57:23] [Thread 3] Incoming connection accepted
+[2026-05-30 15:57:23] [Thread 0] Sending current version: 1
+[2026-05-30 15:57:23] [Thread 3] Client connected
+[2026-05-30 15:57:23] [Thread 3] Client version received: 1
+[2026-05-30 15:57:23] [Thread 3] Update required — sending file
+[2026-05-30 15:57:23] [Thread 0] Update available — downloading...
+[2026-05-30 15:57:23] [Thread 3] Update file sent successfully
+[2026-05-30 15:57:23] [Thread 3] Client disconnected
+[2026-05-30 15:57:23] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 15:57:23] [Thread 0] Simulating update installation...
+[2026-05-30 15:57:24] [Thread 0] Update installed successfully
+[2026-05-30 15:57:24] [Thread 0] Local version updated
+[2026-05-30 15:57:24] [Thread 0] Closing connection
+[2026-05-30 15:58:27] Server starting up
+[2026-05-30 15:58:51] Client starting up
+[2026-05-30 15:58:51] [Thread 0] Checking for update...
+[2026-05-30 15:58:51] [Thread 0] Connected to server
+[2026-05-30 15:58:51] [Thread 0] Sending current version: 1
+[2026-05-30 15:59:01] Server starting up
+[2026-05-30 15:59:19] Server starting up
+[2026-05-30 15:59:37] [Thread 0] ERROR: no response from server
+[2026-05-30 15:59:37] Server starting up
+[2026-05-30 15:59:37] Server listening for connections
+[2026-05-30 15:59:56] Client starting up
+[2026-05-30 15:59:56] [Thread 0] Checking for update...
+[2026-05-30 15:59:56] [Thread 0] Connected to server
+[2026-05-30 15:59:56] [Thread 1] Incoming connection accepted
+[2026-05-30 15:59:56] [Thread 0] Sending current version: 1
+[2026-05-30 15:59:56] [Thread 1] Client connected
+[2026-05-30 15:59:56] [Thread 1] Client version received: 1
+[2026-05-30 15:59:56] [Thread 1] Update required — sending file
+[2026-05-30 15:59:56] [Thread 0] Update available — downloading...
+[2026-05-30 15:59:56] [Thread 1] Update file sent successfully
+[2026-05-30 15:59:56] [Thread 1] Client disconnected
+[2026-05-30 15:59:56] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 15:59:56] [Thread 0] Simulating update installation...
+[2026-05-30 15:59:57] [Thread 0] Update installed successfully
+[2026-05-30 15:59:57] [Thread 0] Local version updated
+[2026-05-30 15:59:57] [Thread 0] Closing connection
+[2026-05-30 16:02:46] Server starting up
+[2026-05-30 16:02:46] Server listening for connections
+[2026-05-30 16:02:53] Client starting up
+[2026-05-30 16:02:53] [Thread 0] Checking for update...
+[2026-05-30 16:02:53] [Thread 0] Connected to server
+[2026-05-30 16:02:53] [Thread 0] Sending current version: 1
+[2026-05-30 16:02:53] [Thread 1] Incoming connection accepted
+[2026-05-30 16:02:53] [Thread 1] Client connected
+[2026-05-30 16:02:53] [Thread 1] Client version received: 1
+[2026-05-30 16:02:53] [Thread 1] Update required — sending file
+[2026-05-30 16:02:53] [Thread 0] Update available — downloading...
+[2026-05-30 16:02:53] [Thread 1] Update file sent successfully
+[2026-05-30 16:02:53] [Thread 1] Client disconnected
+[2026-05-30 16:02:53] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 16:02:53] [Thread 0] Simulating update installation...
+[2026-05-30 16:02:54] [Thread 0] Update installed successfully
+[2026-05-30 16:02:54] [Thread 0] Local version updated
+[2026-05-30 16:02:54] [Thread 0] Closing connection
+[2026-05-30 16:03:51] Server starting up
+[2026-05-30 16:03:51] Server listening for connections
+[2026-05-30 16:03:59] Client starting up
+[2026-05-30 16:03:59] [Thread 0] Checking for update...
+[2026-05-30 16:03:59] [Thread 0] Connected to server
+[2026-05-30 16:03:59] [Thread 0] Sending current version: 1
+[2026-05-30 16:03:59] [Thread 1] Incoming connection accepted
+[2026-05-30 16:03:59] [Thread 1] Client connected
+[2026-05-30 16:03:59] [Thread 1] Client version received: 1
+[2026-05-30 16:03:59] [Thread 1] Update required — sending file
+[2026-05-30 16:03:59] [Thread 1] Update file sent successfully
+[2026-05-30 16:03:59] [Thread 1] Client disconnected
+[2026-05-30 16:03:59] [Thread 0] Update available — downloading...
+[2026-05-30 16:03:59] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 16:03:59] [Thread 0] Simulating update installation...
+[2026-05-30 16:04:00] [Thread 0] Update installed successfully
+[2026-05-30 16:04:00] [Thread 0] Local version updated
+[2026-05-30 16:04:00] [Thread 0] Closing connection
+[2026-05-30 16:04:58] Client starting up
+[2026-05-30 16:04:58] [Thread 0] Checking for update...
+[2026-05-30 16:04:58] [Thread 0] Connected to server
+[2026-05-30 16:04:58] [Thread 0] Sending current version: 5
+[2026-05-30 16:04:58] [Thread 2] Incoming connection accepted
+[2026-05-30 16:04:58] [Thread 2] Client connected
+[2026-05-30 16:04:58] [Thread 2] Client version received: 5
+[2026-05-30 16:04:58] [Thread 2] Client is up to date
+[2026-05-30 16:04:58] [Thread 2] Client disconnected
+[2026-05-30 16:04:58] [Thread 0] Already up to date — no update needed
+[2026-05-30 16:04:58] [Thread 0] Closing connection

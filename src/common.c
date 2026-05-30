@@ -23,8 +23,11 @@ void load_config(const char *filename)
         char *comment = strchr(line, '#');
         if (comment) *comment = '\0';
 
+        // trim trailing whitespace
+        char *end = line + strlen(line) - 1;
+        while (end > line && (*end == ' ' || *end == '\t' || *end == '\n')) *end-- = '\0';
         char key[128], value[128];
-        if (sscanf(line, "%[^=]=%s", key, value) != 2) continue;
+        if (sscanf(line, " %[^=]=%s", key, value) != 2) continue;
 
         if      (strcmp(key, "SERVER_PORT")       == 0) config.server_port       = atoi(value);
         else if (strcmp(key, "LATEST_VERSION")    == 0) config.latest_version    = atoi(value);

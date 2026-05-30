@@ -1,3 +1,8 @@
+// common.h
+// Shared definitions, structs, and function declarations used by both server and client.
+// Includes config struct, message struct, client thread args, and utility function prototypes.
+
+
 #ifndef COMMON_H
 #define COMMON_H
 
