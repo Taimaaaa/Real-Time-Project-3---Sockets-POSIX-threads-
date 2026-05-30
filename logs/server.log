@@ -121,3 +121,43 @@
 [2026-05-30 16:04:58] [Thread 2] Client disconnected
 [2026-05-30 16:04:58] [Thread 0] Already up to date — no update needed
 [2026-05-30 16:04:58] [Thread 0] Closing connection
+[2026-05-30 16:37:36] Server starting up
+[2026-05-30 16:37:36] Server listening for connections
+[2026-05-30 16:37:49] Client starting up
+[2026-05-30 16:37:49] [Thread 0] Checking for update...
+[2026-05-30 16:37:49] [Thread 0] Connected to server
+[2026-05-30 16:37:49] [Thread 1] Incoming connection accepted
+[2026-05-30 16:37:49] [Thread 0] Sending current version: 1
+[2026-05-30 16:37:49] [Thread 1] Client connected
+[2026-05-30 16:37:49] [Thread 1] Client version received: 1
+[2026-05-30 16:37:49] [Thread 1] Update required — sending file
+[2026-05-30 16:37:49] [Thread 0] Update available — downloading...
+[2026-05-30 16:37:49] [Thread 1] Update file sent successfully
+[2026-05-30 16:37:49] [Thread 1] Client disconnected
+[2026-05-30 16:37:49] [Thread 0] Update downloaded and saved to update_files/received_update.pkg
+[2026-05-30 16:37:49] [Thread 0] Simulating update installation...
+[2026-05-30 16:37:50] [Thread 0] Update installed successfully
+[2026-05-30 16:37:50] [Thread 0] Local version updated
+[2026-05-30 16:37:50] [Thread 0] Closing connection
+[2026-05-30 16:38:39] Client starting up
+[2026-05-30 16:38:39] [Thread 0] Checking for update...
+[2026-05-30 16:38:39] [Thread 0] Connected to server
+[2026-05-30 16:38:39] [Thread 2] Incoming connection accepted
+[2026-05-30 16:38:39] [Thread 0] Sending current version: 5
+[2026-05-30 16:38:39] [Thread 2] Client connected
+[2026-05-30 16:38:39] [Thread 2] Client version received: 5
+[2026-05-30 16:38:39] [Thread 2] Client is up to date
+[2026-05-30 16:38:39] [Thread 0] Already up to date — no update needed
+[2026-05-30 16:38:39] [Thread 0] Closing connection
+[2026-05-30 16:38:39] [Thread 2] Client disconnected
+[2026-05-30 16:38:57] Client starting up
+[2026-05-30 16:38:57] [Thread 0] Checking for update...
+[2026-05-30 16:38:57] [Thread 0] Connected to server
+[2026-05-30 16:38:57] [Thread 3] Incoming connection accepted
+[2026-05-30 16:38:57] [Thread 0] Sending current version: 5
+[2026-05-30 16:38:57] [Thread 3] Client connected
+[2026-05-30 16:38:57] [Thread 3] Client version received: 5
+[2026-05-30 16:38:57] [Thread 3] Client is up to date
+[2026-05-30 16:38:57] [Thread 0] Already up to date — no update needed
+[2026-05-30 16:38:57] [Thread 0] Closing connection
+[2026-05-30 16:38:57] [Thread 3] Client disconnected

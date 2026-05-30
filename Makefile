@@ -4,13 +4,14 @@
 
 CC      = gcc
 CFLAGS  = -Wall -g -pthread
+GLFLAGS = -lGL -lGLU -lglut -lm
 SRC     = src
 BUILD   = build
 
 all: $(BUILD)/server $(BUILD)/client
 
-$(BUILD)/server: $(SRC)/server.c $(SRC)/common.c
-	$(CC) $(CFLAGS) $(SRC)/server.c $(SRC)/common.c -o $(BUILD)/server
+$(BUILD)/server: $(SRC)/server.c $(SRC)/common.c $(SRC)/gui.c
+	$(CC) $(CFLAGS) $(SRC)/server.c $(SRC)/common.c $(SRC)/gui.c -o $(BUILD)/server $(GLFLAGS)
 
 $(BUILD)/client: $(SRC)/client.c $(SRC)/common.c
 	$(CC) $(CFLAGS) $(SRC)/client.c $(SRC)/common.c -o $(BUILD)/client
