@@ -1,6 +1,29 @@
-SERVER_PORT=8080                          # port the server listens on
-LATEST_VERSION=5                          # current latest software version
-UPDATE_FILE_PATH=update_files/update_v5.pkg  # file to send to outdated clients
-LOG_FILE_PATH=logs/server.log             # where all events are logged
-MAX_CLIENTS=10                            # max simultaneous client connections
-BUFFER_SIZE=1024                          # buffer size in bytes for socket communication
+# =====================================================================
+# config.txt -- runtime configuration for the update framework.
+# All values are loaded at startup; nothing is hard-coded in the binaries,
+# so you can change behaviour without recompiling. Pass this file as the
+# single command-line argument to both server and client.
+#
+# Format: KEY=VALUE  (no spaces around '='). '#' starts a comment.
+# =====================================================================
+
+SERVER_IP=127.0.0.1                          # address the client dials
+SERVER_PORT=8080                             # port the server binds/listens on
+
+LATEST_VERSION=5                             # newest version the server offers
+UPDATE_FILE_PATH=update_files/update_v5.pkg  # package served to outdated clients
+DOWNLOAD_PATH=downloads/received_update.pkg  # where the client saves the download
+VERSION_FILE_PATH=config/version.txt         # the client's installed version
+
+LOG_FILE_PATH=logs/server.log                # event log (shared by both apps)
+
+MAX_CLIENTS=10                               # concurrent connection cap
+BUFFER_SIZE=4096                             # socket I/O chunk size in bytes
+
+# --- optional shared-secret authentication ---
+REQUIRE_AUTH=0                               # 1 = enforce the token handshake
+AUTH_TOKEN=s3cr3t-update-key                 # shared secret (used when REQUIRE_AUTH=1)
+
+# --- demo aid ---
+ARTIFICIAL_DELAY_MS=300                     # >0 throttles transfers so you can
+                                             # watch concurrency in the GUI
