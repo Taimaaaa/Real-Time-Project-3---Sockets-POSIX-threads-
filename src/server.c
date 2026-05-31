@@ -1,220 +1,362 @@
-// server.c
-// Update server that listens for incoming client connections.
-// Spawns a new thread per client to handle version checks and file transfers concurrently.
-// Updates shared GUI state so the OpenGL monitor reflects real activity.
+/* =====================================================================
+ * server.c
+ * ---------------------------------------------------------------------
+ * Concurrent update server.
+ *
+ *   - Binds the configured port and listens.
+ *   - Spawns ONE detached worker thread per accepted client, so clients
+ *     never block one another.
+ *   - Each worker: optional token authentication -> version compare ->
+ *     either "up to date" or stream the update package framed with a
+ *     size + CRC32 header so the client can verify integrity.
+ *   - Supports resumable downloads (client may request a byte offset).
+ *   - Maintains live statistics for the OpenGL monitor.
+ *   - Installs a SIGINT/SIGTERM handler for a clean shutdown that logs
+ *     the event, closes the listening socket, and flushes the log.
+ *   - SIGPIPE is ignored process-wide; all socket writes use send_all()
+ *     with MSG_NOSIGNAL, so a client vanishing mid-transfer can never
+ *     crash the server.
+ *
+ * Build with GUI (default) or with -DNO_GUI for a headless server.
+ * ===================================================================== */
 
 #include "common.h"
+#include <signal.h>
+#include <fcntl.h>
 
 static int             active_clients = 0;
 static pthread_mutex_t clients_mutex  = PTHREAD_MUTEX_INITIALIZER;
 
-void send_file(int client_fd, int thread_id)
+static volatile sig_atomic_t keep_running = 1;
+static int                   listen_fd    = -1;
+
+/* ---------------------------------------------------------------------
+ * Signal handling: flip the run flag and shut down the listening socket
+ * so accept() unblocks and the main loop exits cleanly.
+ * ------------------------------------------------------------------- */
+static void handle_signal(int sig)
 {
-    FILE *f = fopen(config.update_file_path, "rb");
-    if (!f)
-    {
-        log_event("ERROR: update file not found", thread_id);
-        return;
-    }
-
-    char buffer[1024];
-    int  bytes_read;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), f)) > 0)
-        send(client_fd, buffer, bytes_read, 0);
-
-    fclose(f);
-
-    // update gui counter
-    pthread_mutex_lock(&gui_mutex);
-    gui_total_updates++;
-    pthread_mutex_unlock(&gui_mutex);
-
-    char msg[128];
-    sprintf(msg, "[Thread %d] Update file sent", thread_id);
-    gui_add_log(msg);
-    log_event("Update file sent successfully", thread_id);
+    (void)sig;
+    keep_running = 0;
+    if (listen_fd >= 0) shutdown(listen_fd, SHUT_RDWR);
 }
 
-void *handle_client(void *arg)
+/* Stream the update file to the client starting at `offset` (resume
+ * support). Returns bytes sent, or -1 on error. */
+static long stream_file(int client_fd, int thread_id, uint64_t offset)
+{
+    FILE *f = fopen(config.update_file_path, "rb");
+    if (!f) { log_event("ERROR: update file not found", thread_id); return -1; }
+
+    if (offset > 0 && fseek(f, (long)offset, SEEK_SET) != 0) {
+        log_event("ERROR: could not seek to resume offset", thread_id);
+        fclose(f);
+        return -1;
+    }
+
+    char  *buffer = malloc(config.buffer_size);
+    if (!buffer) { fclose(f); return -1; }
+
+    long   total = 0;
+    size_t n;
+    while ((n = fread(buffer, 1, config.buffer_size, f)) > 0) {
+        if (send_all(client_fd, buffer, n) < 0) {
+            log_event("ERROR: client disconnected during transfer", thread_id);
+            free(buffer); fclose(f);
+            return -1;
+        }
+        total += (long)n;
+        if (config.artificial_delay_ms > 0)        /* demo throttle */
+            usleep(config.artificial_delay_ms * 1000);
+    }
+    free(buffer);
+    fclose(f);
+    return total;
+}
+
+static const char *peer_str(struct sockaddr_in *a, char *out, size_t n)
+{
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &a->sin_addr, ip, sizeof(ip));
+    snprintf(out, n, "%s:%d", ip, ntohs(a->sin_port));
+    return out;
+}
+
+/* Optional shared-secret authentication handshake. Returns 1 if the
+ * client may proceed, 0 if it must be rejected. */
+static int authenticate(int client_fd, int thread_id)
+{
+    if (!config.require_auth) return 1;
+
+    MsgHeader h;
+    if (recv_header(client_fd, &h) != 0 || h.type != MSG_AUTH) {
+        log_event("AUTH: malformed or missing auth message", thread_id);
+        return 0;
+    }
+    MsgHeader resp; memset(&resp, 0, sizeof(resp));
+    if (strncmp(h.auth_token, config.auth_token, MAX_TOKEN_LEN) == 0) {
+        resp.type = MSG_AUTH_OK;
+        send_header(client_fd, &resp);
+        log_event("AUTH: client authenticated", thread_id);
+        return 1;
+    }
+    resp.type = MSG_AUTH_FAIL;
+    send_header(client_fd, &resp);
+    log_event("AUTH: authentication FAILED", thread_id);
+    return 0;
+}
+
+/* ---------------------------------------------------------------------
+ * Per-client worker thread.
+ * ------------------------------------------------------------------- */
+static void *handle_client(void *arg)
 {
     ClientArgs *args      = (ClientArgs *)arg;
     int         client_fd = args->client_fd;
     int         thread_id = args->thread_id;
+    char        peer[80];
+    peer_str(&args->address, peer, sizeof(peer));
     free(arg);
 
-    // update gui: new client connected
     pthread_mutex_lock(&gui_mutex);
     gui_active_clients++;
     gui_total_connected++;
     pthread_mutex_unlock(&gui_mutex);
+    gui_set_slot(thread_id, 1);
 
-    char gui_msg[128];
-    sprintf(gui_msg, "[Thread %d] Client connected", thread_id);
-    gui_add_log(gui_msg);
-    log_event("Client connected", thread_id);
+    log_eventf(thread_id, "Client connected from %s", peer);
+    { char m[128]; snprintf(m,sizeof(m),"[T%d] connected %s", thread_id, peer); gui_add_log(m); }
 
-    // receive client version
-    Message msg;
-    if (recv(client_fd, &msg, sizeof(msg), 0) <= 0)
-    {
-        log_event("ERROR: failed to receive version", thread_id);
-        close(client_fd);
+    int counted_fail = 0;   /* avoid double-counting failures */
 
-        pthread_mutex_lock(&clients_mutex);
-        active_clients--;
-        pthread_mutex_unlock(&clients_mutex);
+    /* --- authentication --- */
+    if (!authenticate(client_fd, thread_id)) {
+        gui_add_log("[auth] rejected a client");
+        goto cleanup;
+    }
 
+    /* --- receive version --- */
+    MsgHeader req;
+    if (recv_header(client_fd, &req) != 0 || req.type != MSG_VERSION) {
+        log_event("ERROR: failed to receive version request", thread_id);
+        pthread_mutex_lock(&gui_mutex); gui_total_failed++; pthread_mutex_unlock(&gui_mutex);
+        counted_fail = 1;
+        goto cleanup;
+    }
+    int client_version = (int)req.version;
+    log_eventf(thread_id, "Version request received: client is on v%d", client_version);
+    { char m[128]; snprintf(m,sizeof(m),"[T%d] reports v%d", thread_id, client_version); gui_add_log(m); }
+
+    /* --- decision --- */
+    if (client_version >= config.latest_version) {
+        MsgHeader resp; memset(&resp, 0, sizeof(resp));
+        resp.type    = MSG_UP_TO_DATE;
+        resp.version = config.latest_version;
+        send_header(client_fd, &resp);
+
+        pthread_mutex_lock(&gui_mutex); gui_total_uptodate++; pthread_mutex_unlock(&gui_mutex);
+        log_event("Decision: client is UP TO DATE", thread_id);
+        { char m[128]; snprintf(m,sizeof(m),"[T%d] up to date", thread_id); gui_add_log(m); }
+        goto cleanup;
+    }
+
+    /* --- update required: compute checksum + size, offer the package --- */
+    uint32_t crc; uint64_t fsize;
+    if (crc32_file(config.update_file_path, &crc, &fsize) != 0) {
+        MsgHeader e; memset(&e,0,sizeof(e)); e.type = MSG_ERROR;
+        send_header(client_fd, &e);
+        log_event("ERROR: cannot read update file for checksum", thread_id);
+        pthread_mutex_lock(&gui_mutex); gui_total_failed++; pthread_mutex_unlock(&gui_mutex);
+        counted_fail = 1;
+        goto cleanup;
+    }
+
+    MsgHeader offer; memset(&offer, 0, sizeof(offer));
+    offer.type      = MSG_UPDATE_AVAIL;
+    offer.version   = config.latest_version;
+    offer.file_size = fsize;
+    offer.crc32     = crc;
+    send_header(client_fd, &offer);
+    log_eventf(thread_id, "Decision: UPDATE -> offering v%d (%llu bytes, crc=%08x)",
+               config.latest_version, (unsigned long long)fsize, crc);
+    { char m[128]; snprintf(m,sizeof(m),"[T%d] sending v%d", thread_id, config.latest_version); gui_add_log(m); }
+
+    /* The client may now request a resume offset before we stream. */
+    MsgHeader ready;
+    if (recv_header(client_fd, &ready) != 0) {
+        log_event("ERROR: client did not confirm download readiness", thread_id);
+        pthread_mutex_lock(&gui_mutex); gui_total_failed++; pthread_mutex_unlock(&gui_mutex);
+        counted_fail = 1;
+        goto cleanup;
+    }
+    uint64_t start = (ready.type == MSG_RESUME) ? ready.resume_offset : 0;
+    if (start > 0) log_eventf(thread_id, "Resuming transfer from byte %llu",
+                              (unsigned long long)start);
+
+    long sent = stream_file(client_fd, thread_id, start);
+    if (sent < 0) {
+        pthread_mutex_lock(&gui_mutex); gui_total_failed++; pthread_mutex_unlock(&gui_mutex);
+        counted_fail = 1;
+        goto cleanup;
+    }
+
+    /* --- wait for the client's verdict on the checksum --- */
+    MsgHeader verdict;
+    if (recv_header(client_fd, &verdict) == 0 && verdict.type == MSG_ACK) {
         pthread_mutex_lock(&gui_mutex);
-        gui_active_clients--;
+        gui_total_updates++;
+        gui_bytes_sent += sent;
         pthread_mutex_unlock(&gui_mutex);
-
-        pthread_exit(NULL);
+        log_eventf(thread_id, "Transfer complete and ACKed (%ld bytes)", sent);
+        { char m[128]; snprintf(m,sizeof(m),"[T%d] update OK (%ld B)", thread_id, sent); gui_add_log(m); }
+    } else {
+        pthread_mutex_lock(&gui_mutex); gui_total_failed++; pthread_mutex_unlock(&gui_mutex);
+        counted_fail = 1;
+        log_event("ERROR: client reported checksum mismatch (NACK)", thread_id);
+        { char m[128]; snprintf(m,sizeof(m),"[T%d] FAILED checksum", thread_id); gui_add_log(m); }
     }
 
-    char event[128];
-    sprintf(event, "Client version received: %d", msg.version);
-    log_event(event, thread_id);
-
-    sprintf(gui_msg, "[Thread %d] Version: %d", thread_id, msg.version);
-    gui_add_log(gui_msg);
-
-    // compare version and respond
-    if (msg.version < config.latest_version)
-    {
-        msg.update_available = 1;
-        msg.version          = config.latest_version;
-        send(client_fd, &msg, sizeof(msg), 0);
-
-        sprintf(gui_msg, "[Thread %d] Sending update v%d", thread_id, config.latest_version);
-        gui_add_log(gui_msg);
-        log_event("Update required — sending file", thread_id);
-
-        send_file(client_fd, thread_id);
-    }
-    else
-    {
-        msg.update_available = 0;
-        send(client_fd, &msg, sizeof(msg), 0);
-
-        sprintf(gui_msg, "[Thread %d] Already up to date", thread_id);
-        gui_add_log(gui_msg);
-        log_event("Client is up to date", thread_id);
-    }
-
-    log_event("Client disconnected", thread_id);
-
-    sprintf(gui_msg, "[Thread %d] Client disconnected", thread_id);
-    gui_add_log(gui_msg);
-
+cleanup:
+    (void)counted_fail;
+    log_eventf(thread_id, "Closing connection to %s", peer);
+    { char m[128]; snprintf(m,sizeof(m),"[T%d] disconnected", thread_id); gui_add_log(m); }
     close(client_fd);
 
-    // decrement both counters on disconnect
-    pthread_mutex_lock(&clients_mutex);
-    active_clients--;
-    pthread_mutex_unlock(&clients_mutex);
-
-    pthread_mutex_lock(&gui_mutex);
-    gui_active_clients--;
-    pthread_mutex_unlock(&gui_mutex);
-
+    gui_set_slot(thread_id, 0);
+    pthread_mutex_lock(&clients_mutex); active_clients--; pthread_mutex_unlock(&clients_mutex);
+    pthread_mutex_lock(&gui_mutex);     gui_active_clients--; pthread_mutex_unlock(&gui_mutex);
     pthread_exit(NULL);
 }
 
-// gui thread entry point — runs glutMainLoop which blocks forever
-void *gui_thread_func(void *arg)
+#ifndef NO_GUI
+static void *gui_thread_func(void *arg)
 {
-    int   argc = 0;
-    char *argv[] = { NULL };
-    init_gui(&argc, argv);
+    (void)arg;
+    int argc = 1; char *argv[] = { (char*)"server", NULL };
+    init_gui(&argc, argv);   /* blocks in glutMainLoop */
     return NULL;
 }
+#endif
 
 int main(int argc, char **argv)
 {
-    if (argc != 2)
-    {
-        printf("Usage: ./server config/config.txt\n");
-        exit(-1);
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <config-file>\n", argv[0]);
+        return EXIT_FAILURE;
     }
 
-    load_config(argv[1]);
-    log_event("Server starting up", -1);
+    /* SIGPIPE would otherwise kill us when a client vanishes mid-send. */
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT,  handle_signal);
+    signal(SIGTERM, handle_signal);
 
-    // start gui in its own thread
+    load_config(argv[1]);
+
+    pthread_mutex_lock(&gui_mutex);
+    gui_server_running  = 1;
+    gui_active_clients  = 0;
+    gui_total_connected = 0;
+    gui_total_updates   = 0;
+    gui_total_uptodate  = 0;
+    gui_total_failed    = 0;
+    gui_bytes_sent      = 0;
+    gui_log_count       = 0;
+    pthread_mutex_unlock(&gui_mutex);
+    gui_reset_slots();   /* clears slot_used[] and slot_owner[] */
+
+    log_event("===== Server starting up =====", -1);
+    log_eventf(-1, "Config: port=%d latest=v%d max_clients=%d auth=%s",
+               config.server_port, config.latest_version, config.max_clients,
+               config.require_auth ? "on" : "off");
+
+#ifndef NO_GUI
     pthread_t gui_tid;
     pthread_create(&gui_tid, NULL, gui_thread_func, NULL);
     pthread_detach(gui_tid);
+#endif
 
-    // create server socket
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) { perror("socket"); exit(-1); }
+    listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_fd < 0) { perror("socket"); return EXIT_FAILURE; }
 
     int opt = 1;
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family      = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port        = htons(config.server_port);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port        = htons(config.server_port);
 
-    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        perror("bind");
-        exit(-1);
+    if (bind(listen_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind"); return EXIT_FAILURE;
+    }
+    if (listen(listen_fd, config.max_clients) < 0) {
+        perror("listen"); return EXIT_FAILURE;
     }
 
-    if (listen(server_fd, config.max_clients) < 0)
-    {
-        perror("listen");
-        exit(-1);
-    }
-
-    log_event("Server listening for connections", -1);
-    gui_add_log("Server listening on port 8080");
+    log_eventf(-1, "Server listening on port %d", config.server_port);
+    { char m[64]; snprintf(m,sizeof(m),"Listening on port %d", config.server_port); gui_add_log(m); }
 
     int thread_counter = 0;
+    while (keep_running) {
+        ClientArgs *cargs   = malloc(sizeof(ClientArgs));
+        if (!cargs) { log_event("ERROR: out of memory", -1); continue; }
+        socklen_t addr_len  = sizeof(cargs->address);
 
-    while (1)
-    {
-        ClientArgs *args   = malloc(sizeof(ClientArgs));
-        socklen_t addr_len = sizeof(args->address);
-
-        args->client_fd = accept(server_fd, (struct sockaddr *)&args->address, &addr_len);
-        if (args->client_fd < 0)
-        {
+        cargs->client_fd = accept(listen_fd, (struct sockaddr*)&cargs->address, &addr_len);
+        if (cargs->client_fd < 0) {
+            free(cargs);
+            if (!keep_running) break;          /* shutdown requested */
+            if (errno == EINTR) continue;
             perror("accept");
-            free(args);
             continue;
         }
 
         pthread_mutex_lock(&clients_mutex);
-        if (active_clients >= config.max_clients)
-        {
-            log_event("Max clients reached — connection refused", -1);
-            gui_add_log("Connection refused: max clients reached");
-            close(args->client_fd);
-            free(args);
+        if (active_clients >= config.max_clients) {
             pthread_mutex_unlock(&clients_mutex);
+            log_event("Max clients reached -- connection refused", -1);
+            gui_add_log("Refused: server full");
+            close(cargs->client_fd);
+            free(cargs);
             continue;
         }
         active_clients++;
         pthread_mutex_unlock(&clients_mutex);
 
-        args->thread_id = ++thread_counter;
-        log_event("Incoming connection accepted", args->thread_id);
+        cargs->thread_id = ++thread_counter;
+        log_eventf(cargs->thread_id, "Incoming connection accepted");
 
         pthread_t tid;
-        if (pthread_create(&tid, NULL, handle_client, args) != 0)
-        {
+        if (pthread_create(&tid, NULL, handle_client, cargs) != 0) {
             perror("pthread_create");
-            free(args);
+            close(cargs->client_fd);
+            free(cargs);
+            pthread_mutex_lock(&clients_mutex); active_clients--; pthread_mutex_unlock(&clients_mutex);
             continue;
         }
-
         pthread_detach(tid);
     }
 
-    close(server_fd);
-    return 0;
+    /* ----- graceful shutdown ----- */
+    log_event("===== Server shutting down =====", -1);
+    pthread_mutex_lock(&gui_mutex); gui_server_running = 0; pthread_mutex_unlock(&gui_mutex);
+
+    if (listen_fd >= 0) close(listen_fd);
+
+    /* give in-flight workers a brief moment to finish logging */
+    for (int i = 0; i < 20; i++) {
+        pthread_mutex_lock(&clients_mutex);
+        int a = active_clients;
+        pthread_mutex_unlock(&clients_mutex);
+        if (a == 0) break;
+        usleep(100 * 1000);
+    }
+
+    log_eventf(-1, "Final stats: connected=%d updates=%d uptodate=%d failed=%d bytes=%ld",
+               gui_total_connected, gui_total_updates, gui_total_uptodate,
+               gui_total_failed, gui_bytes_sent);
+    close_log();
+    printf("Server stopped cleanly.\n");
+    return EXIT_SUCCESS;
 }
