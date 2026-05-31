@@ -23,6 +23,7 @@
 #include "common.h"
 #include <signal.h>
 #include <fcntl.h>
+#include <dirent.h>
 
 static int             active_clients = 0;
 static pthread_mutex_t clients_mutex  = PTHREAD_MUTEX_INITIALIZER;
@@ -252,6 +253,38 @@ int main(int argc, char **argv)
 
     load_config(argv[1]);
 
+    /* --- automatic cleanup of stale state from previous runs --- */
+    {
+        /* Remove any leftover partial downloads in the downloads/ folder.
+         * Each run is independent; the server doesn't need files left behind
+         * by prior client processes (the clients clean their own up on
+         * success, but a killed client may leave a partial behind). */
+        char *dir = strdup(config.download_path);
+        if (dir) {
+            char *slash = strrchr(dir, '/');
+            if (slash) {
+                *slash = '\0';
+                DIR *d = opendir(dir);
+                if (d) {
+                    struct dirent *ent;
+                    int removed = 0;
+                    while ((ent = readdir(d)) != NULL) {
+                        if (ent->d_name[0] == '.') continue;
+                        if (strstr(ent->d_name, ".pkg") == NULL) continue;
+                        char path[512];
+                        snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
+                        if (unlink(path) == 0) removed++;
+                    }
+                    closedir(d);
+                    if (removed > 0)
+                        printf("Cleaned %d stale download file(s) from %s/\n",
+                               removed, dir);
+                }
+            }
+            free(dir);
+        }
+    }
+
     pthread_mutex_lock(&gui_mutex);
     gui_server_running  = 1;
     gui_active_clients  = 0;
@@ -358,5 +391,9 @@ int main(int argc, char **argv)
                gui_total_failed, gui_bytes_sent);
     close_log();
     printf("Server stopped cleanly.\n");
-    return EXIT_SUCCESS;
+    fflush(stdout);
+    /* GLUT's atexit handler can race with our shutdown and emit a
+     * harmless X BadAccess error. Bypass libc cleanup with _exit so
+     * the return code stays 0 and the terminal output is clean. */
+    _exit(EXIT_SUCCESS);
 }
